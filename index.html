@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animation fourmis</title>
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            display: flex;
+            background-color: #f4f4f4;
+        }
+
+        #Conteneur {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+            align-items: center;
+            background-color: #f4f4f4;
+        }
+
+        #zone-gauche {
+            flex: auto;
+            background: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            margin-left:20px;
+        }
+
+        canvas {
+            border: none;
+        }
+
+        #zone-droite {
+            flex: auto;
+            background: #ddd;
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* espace entre éléments */
+            padding: 10px;
+            margin-right: 20px;
+            align-items: flex-start;
+            height: auto;
+        }
+
+        #zone-droite1 {
+            display: flex;
+            flex-wrap: wrap; /* permet d’aller à la ligne */
+            align-content: flex-start;
+            align-items: center;
+            gap: 10px; /* espace entre éléments */
+            padding: 10px;
+            /*justify-content: center;  centre verticalement */
+        }
+
+        #zone-droite1 > * {
+            flex: 1 1 45%; /* chaque élément prend environ la moitié de la largeur */
+            min-width: 120px; /* largeur mini pour éviter que ça devienne trop petit */
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        #TexteSol {
+            align-self: stretch;
+            font-family: Arial, sans-serif; /* police */
+            font-size: 17px; /* taille */
+            height: 100px; /* hauteur */
+            resize: none; /* interdit le redimensionnement manuel */
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="Conteneur">
+        <div id="zone-gauche">
+            <canvas id="mainCanvas" width="900" height=700></canvas>
+        </div>
+
+        <div id="zone-droite">
+            <div id="zone-droite1">
+                <button id="PreviousButton">Pas précédent</button>
+                <button id="NextButton">Pas suivant</button>
+                <button id="Reinitialize">Réinitialiser</button>
+
+                <label>
+                    Pas :
+                    <input type="number" id="NumTour" min="0" max="1" value="0">
+                </label>
+
+                <label>
+                    <input type="checkbox" id="AffCroisements" checked="checked">
+                    Afficher les croisements
+                </label>
+
+                <label>
+                    <input type="checkbox" id="AffTexte" checked="checked">
+                    Afficher le texte
+                </label>
+            </div>
+
+
+            <textarea id="TexteSol" readonly placeholder=""></textarea>
+
+            <button id="PleinEcran">Plein écran</button>
+        </div>
+    </div>
+
+    <script>
+        // Récupération les éléments
+        const mainCanvas = document.getElementById('mainCanvas');
+        const mainCtx = mainCanvas.getContext('2d');
+        const PreviousButton = document.getElementById('PreviousButton');
+        const NextButton = document.getElementById('NextButton');
+        const Reinitialize = document.getElementById('Reinitialize');
+        const AffCroisements = document.getElementById("AffCroisements");
+        const AffTexte = document.getElementById("AffTexte");
+        const NumTour = document.getElementById("NumTour");
+        const TexteSol = document.getElementById("TexteSol");
+        const PleinEcran = document.getElementById("PleinEcran");
+        const Conteneur = document.getElementById("Conteneur");
+
+        // Créer un canvas secondaire (hors écran) pour le fond
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = mainCanvas.width;
+        offscreenCanvas.height = mainCanvas.height;
+        const offscreenCtx = offscreenCanvas.getContext('2d');
+
+        // Mes constantes
+        const n = 182;
+        const lettres = "LU●TEODEECUDESGDITTAMR●S●TIU●UAVIRRSAYAE●NELAGICORHOEUEVDAEEPTASSUNSESUQSCRT●NLLAFAERAIIAABILSQUOTTMEFISTSEELUTOREITTOLE●RBREVUREVATAL●PVSUARDAR●NTCAOETETREFNEPOTCOCPEPLQUITNEC●SMHUA";
+        const posinit = [2, 22, 24, 28, 40, 76, 120, 134, 144, 176];
+        const turns = [{ x: 0, y: 12 }, { x: 0, y: 0 }, { x: 13, y: 0 }, { x: 13, y: 12 }, { x: 2, y: 12 }, { x: 2, y: 2 }, { x: 11, y: 2 }, { x: 11, y: 10 }, { x: 4, y: 10 },
+        { x: 4, y: 4 }, { x: 9, y: 4 }, { x: 9, y: 8 }, { x: 6, y: 8 }, { x: 6, y: 6 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 8, y: 7 }, { x: 8, y: 5 }, { x: 5, y: 5 },
+        { x: 5, y: 9 }, { x: 10, y: 9 }, { x: 10, y: 3 }, { x: 3, y: 3 }, { x: 3, y: 11 }, { x: 12, y: 11 }, { x: 12, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 12 }, { x: 0, y: 12 }];
+        const xmax = 14;
+        const ymax = 13;
+        const couleurs = [
+            "#e6194B", // rouge vif
+            "#3cb44b", // vert
+            "#4363d8", // bleu
+            "#f58231", // orange
+            "#911eb4", // violet
+            "#46f0f0", // cyan
+            "#f032e6", // magenta
+            "#bcf60c", // vert clair
+            "#fabebe", // rose pâle
+            "#008080"  // turquoise
+        ];
+        const dessin_fleche = [{ x: -0.75, y: -.5 }, { x: -0.75, y: .5 }, { x: 0.25, y: .5 }, { x: 0.75, y: 0 }, { x: 0.25, y: -.5 }];
+        const fact_fleche = .35;
+        const marge = 0;
+
+        const duree_pas = 0.3;
+        const fpp = 5;
+
+        const epa_poly = 1;
+        const ray_crois = 40;
+        const col_crois = 'red';
+        const epa_cercle = 2;
+
+        //Police
+        offscreenCtx.font = "22px Arial";          // taille + police
+        offscreenCtx.fillStyle = "black";          // couleur du texte
+        offscreenCtx.textAlign = "center";     // centre horizontalement
+        offscreenCtx.textBaseline = "middle";  // centre verticalement
+
+        TexteSol.font = "17px Arial";
+        TexteSol.fillstyle = "black";
+        TexteSol.textAlign = "Left";
+        TexteSol.textBaseline = "Top";
+
+        //Calcul animation
+        let waiting_time = duree_pas * 1000 / fpp;
+
+        //Calcul coordonnées
+        const tcase = Math.min((mainCanvas.width - 2 * marge) / xmax, (mainCanvas.height - 2 * marge) / ymax);
+        const coinx = (mainCanvas.width - tcase * xmax) / 2;
+        const coiny = (mainCanvas.height + tcase * ymax) / 2;
+
+        function phi(x, y) {
+            return { x: coinx + tcase * x, y: coiny - tcase * y };
+        }
+
+        // Mes fonctions calcul
+        function apres(i) { return i === n - 1 ? 0 : i + 1; }
+        function avant(i) { return i === 0 ? n - 1 : i - 1; }
+        function calc_circuit() {
+            let circ = Array(n).fill(null).map(() => ({ x: 0, y: 0, from: 0, to: 0 }));
+            let curs = 0;
+            for (let i = 0; i < turns.length - 1; i++) {
+                if (turns[i].x === turns[i + 1].x) {
+                    let cx = turns[i].x;
+                    let y0 = turns[i].y;
+                    let y1 = turns[i + 1].y;
+                    let step = (y0 < y1) ? 1 : -1;
+                    let dist = Math.abs(y1 - y0);
+                    for (let j = 0; j < dist; j++) {
+                        circ[curs].x = cx;
+                        circ[curs].y = y0 + step * j;
+                        circ[curs].to = 1 - step
+                        circ[apres(curs)].from = 1 - step;
+                        curs++;
+                    }
+                }
+                else if (turns[i].y === turns[i + 1].y) {
+                    let cy = turns[i].y;
+                    let x0 = turns[i].x;
+                    let x1 = turns[i + 1].x;
+                    let step = (x0 < x1) ? 1 : -1;
+                    let dist = Math.abs(x1 - x0);
+                    for (let j = 0; j < dist; j++) {
+                        circ[curs].x = x0 + step * j;
+                        circ[curs].y = cy;
+                        circ[curs].to = 2 - step;
+                        circ[apres(curs)].from = 2 - step;
+                        curs++;
+                    }
+                } else { throw "Circuit mal formé !" }
+            }
+            return circ
+        }
+
+        function calc_croisements() {
+            let l_crois = Array(n - 1).fill(0);
+            for (const p1 of posinit) {
+                for (const p2 of posinit) {
+                    if (p1 === p2) { continue };
+                    let dist = p2 - p1;
+                    if (dist < 0) { dist += n };
+                    let date = Math.round(dist / 2);
+                    let lieu = p1 + date;
+                    if (lieu >= n) { lieu -= n };
+                    l_crois[date - 1] = lieu;
+                }
+            }
+            let phrase_sol = "";
+            for (d = 0; d < n - 1; d++) {
+                phrase_sol += lettres[l_crois[d]];
+            }
+            return [l_crois, phrase_sol];
+        }
+
+        let circ = calc_circuit();
+        let [l_crois, phrase_sol] = calc_croisements();
+
+        // Dessin polygone
+        function drawPolygone(ctx, lp, col = null) {
+            ctx.beginPath();
+            p = phi(lp[0].x, lp[0].y);
+            ctx.moveTo(p.x, p.y);
+            for (let i = 1; i < lp.length; i++) {
+                p = phi(lp[i].x, lp[i].y);
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = 'black';
+            ctx.stroke();
+            if (col !== null) {
+                ctx.fillStyle = col;
+                ctx.fill();
+            }
+        }
+
+        // Dessin arcs
+        function drawArcs() {
+            for (cs of circ) {
+                if (cs.from === cs.to) { continue };
+                let from2 = (cs.from + 2) % 4;
+                let dir = (from2 - cs.to === 1 || (from2 === 0 && cs.to === 3)) ? cs.to : from2;
+                let [x, y, theta0] = [0, 0, 0];
+                switch (dir) {
+                    case 0:
+                        [x, y, theta0] = [cs.x + 1, cs.y + 1, .5];
+                        break;
+                    case 1:
+                        [x, y, theta0] = [cs.x + 1, cs.y, 1];
+                        break;
+                    case 2:
+                        [x, y, theta0] = [cs.x, cs.y, 1.5];
+                        break;
+                    case 3:
+                        [x, y, theta0] = [cs.x, cs.y + 1, 0];
+                        break;
+                }
+                let p = phi(x, y);
+                offscreenCtx.beginPath();
+                offscreenCtx.arc(p.x, p.y, tcase, theta0 * Math.PI, (theta0 + .5) * Math.PI);
+                offscreenCtx.strokeStyle = 'black';
+                offscreenCtx.stroke();
+            }
+        }
+
+        // Dessin murs
+        function drawWalls() {
+            let walls = Array(xmax).fill(null).map(() => (Array(ymax).fill(null).map(() => [true, true])));
+            for (cs of circ) {
+                let dirs = Array(4).fill(true);
+                if (cs.from === cs.to) {
+                    if (cs.from === 0 || cs.from === 2) {
+                        dirs[1] = false;
+                        dirs[3] = false;
+                    }
+                    else {
+                        dirs[0] = false;
+                        dirs[2] = false;
+                    }
+                }
+                if (dirs[0]) { walls[cs.x][cs.y][0] = false; }
+                if (dirs[1]) { walls[cs.x][cs.y][1] = false; }
+                if (dirs[2] && cs.y > 0) { walls[cs.x][cs.y - 1][0] = false; }
+                if (dirs[3] && cs.x > 0) { walls[cs.x - 1][cs.y][1] = false; }
+            }
+            for (x = 0; x < xmax; x++) {
+                for (y = 0; y < ymax; y++) {
+                    if (walls[x][y][0]) {
+                        let p1 = phi(x, y + 1);
+                        let p2 = phi(x + 1, y + 1);
+                        offscreenCtx.beginPath();
+                        offscreenCtx.moveTo(p1.x, p1.y);
+                        offscreenCtx.lineTo(p2.x, p2.y);
+                        offscreenCtx.strokeStyle = 'black';
+                        offscreenCtx.stroke();
+                    }
+                    if (walls[x][y][1]) {
+                        let p1 = phi(x + 1, y + 1);
+                        let p2 = phi(x + 1, y);
+                        offscreenCtx.beginPath();
+                        offscreenCtx.moveTo(p1.x, p1.y);
+                        offscreenCtx.lineTo(p2.x, p2.y);
+                        offscreenCtx.strokeStyle = 'black';
+                        offscreenCtx.stroke();
+                    }
+
+                }
+            }
+        }
+
+
+        // Dessin premier plan
+        function drawCircuit() {
+            let cadre = [{ x: 0, y: 0 }, { x: xmax, y: 0 }, { x: xmax, y: ymax }, { x: 0, y: ymax }];
+            drawPolygone(offscreenCtx, cadre);
+            drawArcs();
+            drawWalls();
+            for (let i = 0; i < n; i++) {
+                p = phi(circ[i].x + 0.5, circ[i].y + 0.5);
+                offscreenCtx.fillText(lettres[i], p.x, p.y);
+            }
+
+        }
+
+        //Coordonnées
+        function coords(t, sens) {
+            while (t < 0) { t += n; }
+            while (t >= n) { t -= n; }
+            let nt = Math.floor(t);
+            let cs = circ[nt];
+            let ft = t - nt;
+            if (sens === -1) { ft = 1 - ft; }
+            let [from, to] = sens === 1 ? [cs.from, cs.to] : [(cs.to + 2) % 4, (cs.from + 2) % 4];
+            if (from === to) {
+                switch (from) {
+                    case 0:
+                        return [cs.x + .75, cs.y + ft, Math.PI * .5];
+                    case 1:
+                        return [cs.x + ft, cs.y + .25, 0];
+                    case 2:
+                        return [cs.x + .25, cs.y + 1 - ft, Math.PI * 1.5];
+                    case 3:
+                        return [cs.x + 1 - ft, cs.y + .75, Math.PI];
+                }
+            }
+            else {
+                let [cx, cy, theta] = [null, null, null];
+                switch (from) {
+                    case 0:
+                        [cx, cy, ray, theta, sr] = to === 1 ? [cs.x + 1, cs.y, .25, Math.PI * (1 - .5 * ft), -1] : [cs.x, cs.y, .75, Math.PI * .5 * ft, 1];
+                        break;
+                    case 1:
+                        [cx, cy, ray, theta, sr] = to === 0 ? [cs.x, cs.y + 1, .75, Math.PI * (1.5 + .5 * ft), 1] : [cs.x, cs.y, .25, Math.PI * (.5 - .5 * ft), -1];
+                        break;
+                    case 2:
+                        [cx, cy, ray, theta, sr] = to === 1 ? [cs.x + 1, cs.y + 1, .75, Math.PI * (1 + .5 * ft), 1] : [cs.x, cs.y + 1, .25, Math.PI * (2 - .5 * ft), -1];
+                        break;
+                    case 3:
+                        [cx, cy, ray, theta, sr] = to === 0 ? [cs.x + 1, cs.y + 1, .25, Math.PI * (1.5 - .5 * ft), -1] : [cs.x + 1, cs.y, .75, Math.PI * (.5 + .5 * ft), 1];
+                        break;
+                }
+                return [cx + Math.cos(theta) * ray, cy + Math.sin(theta) * ray, theta + sr * Math.PI * .5];
+            }
+        }
+
+        function rotation_translation(tx, ty, x, y, theta) {
+            return { x: tx + x * Math.cos(theta) - y * Math.sin(theta), y: ty + x * Math.sin(theta) + y * Math.cos(theta) };
+        }
+
+        function dessine(t) {
+            mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+            for (i = 0; i < posinit.length; i++) {
+                for (sens = 1; sens >= -1; sens -= 2) {
+                    let [cx, cy, theta] = coords(posinit[i] + .5 + sens * t, sens);
+                    let le_poly = [];
+                    for (j = 0; j < dessin_fleche.length; j++) {
+                        le_poly.push(rotation_translation(cx, cy, fact_fleche * dessin_fleche[j].x, fact_fleche * dessin_fleche[j].y, theta));
+                    }
+                    drawPolygone(mainCtx, le_poly, col = couleurs[i]);
+                }
+            }
+            mainCtx.drawImage(offscreenCanvas, 0, 0);
+        }
+
+        function aff_crois_texte() {
+            if (AffCroisements.checked && current_t > 0 && current_t < Math.round(n / 2)) {
+                let cs = circ[l_crois[current_t - 1]];
+                let p = phi(cs.x + .5, cs.y + .5);
+                mainCtx.lineWidth = epa_cercle;
+                mainCtx.beginPath();
+                mainCtx.arc(p.x, p.y, ray_crois, 0, Math.PI * 2);
+                mainCtx.strokeStyle = col_crois;
+                mainCtx.stroke();
+                mainCtx.lineWidth = epa_poly;
+            }
+            let texte_aff = "";
+            if (AffTexte.checked && current_t > 0) {
+                let taille = current_t;
+                if (taille == Math.round(n / 2)) { taille-- };
+                texte_aff = phrase_sol.slice(0, taille);
+            }
+            TexteSol.value = texte_aff;
+        }
+
+        async function forward() {
+            if (current_t === Math.round(n / 2)) { return null };
+            current_t++;
+            for (let i = 1; i <= fpp; i++) {
+                setTimeout(() => {
+                    dessine(current_t - 1 + i / fpp);
+                }, i * waiting_time);
+            }
+            NumTour.value = current_t;
+            setTimeout(() => {
+                aff_crois_texte();
+            }, (fpp + 1) * waiting_time);
+        }
+
+        async function backward() {
+            if (current_t === 0) { return null };
+            current_t--;
+            for (let i = 1; i <= fpp; i++) {
+                setTimeout(() => {
+                    dessine(current_t + 1 - i / fpp);
+                }, i * waiting_time);
+            }
+            NumTour.value = current_t;
+            setTimeout(() => {
+                aff_crois_texte();
+            }, (fpp + 1) * waiting_time);
+        }
+
+        function AfficheTour() {
+            let val = parseInt(NumTour.value, 10);
+            if (isNaN(val)) {
+                NumTour.value = current_t;
+                return null;
+            }
+            if (val < 0) {
+                val = 0;
+                NumTour.value = val;
+            }
+            if (val > Math.round(n / 2)) {
+                val = Math.round(n / 2);
+                NumTour.value = val;
+            }
+            current_t = val;
+            dessine(current_t);
+            aff_crois_texte();
+        }
+
+        function Maj_crois_texte() {
+            dessine(current_t);
+            aff_crois_texte();
+        }
+
+        function Reinitialise() {
+            current_t = 0;
+            NumTour.value = 0;
+            dessine(0);
+            aff_crois_texte();
+        }
+
+        //Fonction plein écran
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                // Demande le plein écran
+                if (Conteneur.requestFullscreen) {
+                    Conteneur.requestFullscreen();
+                } else if (Conteneur.webkitRequestFullscreen) { // Safari
+                    Conteneur.webkitRequestFullscreen();
+                } else if (Conteneur.msRequestFullscreen) { // IE/Edge ancien
+                    Conteneur.msRequestFullscreen();
+                }
+            } else {
+                // Quitte le plein écran
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        document.addEventListener("fullscreenchange", () => {
+            if (document.fullscreenElement) {
+                PleinEcran.innerText = "Quitter le plein écran";
+            } else {
+                PleinEcran.innerText = "Plein écran";
+            }
+        });
+
+        //Initialisation
+        NumTour.max = Math.round(n / 2);
+        NumTour.value = 0;
+        drawCircuit();
+        dessine(0);
+        let current_t = 0;
+        aff_crois_texte();
+
+        // Ajouter les événements aux boutons
+        PreviousButton.addEventListener('click', backward);
+        NextButton.addEventListener('click', forward);
+        Reinitialize.addEventListener('click', Reinitialise);
+        NumTour.addEventListener('change', AfficheTour);
+        AffCroisements.addEventListener('change', Maj_crois_texte);
+        AffTexte.addEventListener('change', Maj_crois_texte);
+        PleinEcran.addEventListener('click', toggleFullscreen);
+    </script>
+
+</body>
+</html>
